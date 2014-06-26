@@ -1,0 +1,13 @@
+simulator_main: ports: p_eyes 4321. p_es1 4322. p_er1 4323. p_es2 4324. p_er2 4325.
+esperando conexão da estratégia 1 para send.
+esperando conexão da estratégia 1 para recv.
+esperando conexão da estratégia 1 para send.
+esperando conexão da estratégia 1 para recv.
+Simulator: Eyes: Ready to receave connection from Eyes.
+pronto: 0
+pronto: 0
+pronto: 0
+pronto: 0
+pronto: 2
+pronto: 2
+pronto: 2

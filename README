@@ -1,0 +1,9 @@
+Most of USPDroidsSimulator was developed by Diogo Oliveira de Melo, with a lot of contributions from others. To report bugs or questions about this project, please send an email to dmelo87@gmail.com.
+
+Before compile the simulator, checkout the bin folder. Maybe the compiled binaries are usefull and you will need not to compile the simulador again.
+
+You can easily run the simulator through fast_exec.sh. Only you need to do is execute the command "sh fast_exec.sh".
+
+Some information file (AUTHORS, KNOWN_BUGS...) are deprecated. I'm working hard but my efforts are limited.
+
+For more information visit the site http://uspds.sourceforge.net, or send an email to dmelo87@gmail.com.

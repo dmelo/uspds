@@ -1,0 +1,24 @@
+FORÇA
+
+nova_f_roda_esquerda  -> depende da velocidade desejada e da velocidade atual
+nova_f_roda_direita   -> depende da velocidade desejada e da velocidade atual
+
+nova_forca_resultante -> somatorio(forca_rodas, f_atrito_rodas, f_externas)
+novo_torque           -> colisao + diff(f_rodas)
+
+
+VELOCIDADE
+
+nova_v_angular        -> v_angular e novo_torque
+nova_velocidade       -> v_anterior e forca_resultante
+
+nova_v_roda_esquerda  -> nova_velocidade e nova_v_angular
+nova_v_roda_direita   -> nova_velocidade e nova_v_angular
+
+
+DESLOCAMENTO
+
+novo_x                -> x + nova_velocidade * delta_t
+novo_y                -> y + nova_velocidade * delta_t
+
+novo_angulo           -> angulo + nova_v_angular * delta_t

@@ -1,0 +1,1 @@
+g++-4.0 -O3 -mtune=pentium4 -mno-sse2 -mfpmath=sse -march=i686 teste.cc mathud.cc

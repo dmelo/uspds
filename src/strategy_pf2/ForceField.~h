@@ -1,0 +1,64 @@
+#ifndef FORCEFIELD_H
+#define FORCEFIELD_H
+
+/**
+Exemplo:
+tForce FResultante,Faux,Frepsulsao,Fatracao;
+
+//Calculando a força resultante
+Frepulsao.setXY(0,0); //zerando a força resultante
+for(int i=0; i<7; i++)
+{
+    readsensor(i,distX,distY);
+    Faux.setXY(distX,distY);
+    Frepulsao = Frepulsão + Faux;
+}
+Fatracao.setXYMod(MetaX,MetaY,1); //setXYMod pois o módulo deve ser contante
+FResultante = -0.7*Frepulsao + Fatracao;
+//sinal negativo para inverter a direção como repusao
+
+//fazendo as leituras
+FResultante.mod() retorna o módulo
+FResultante.ang() retorna o angulo
+FResultante.fdx() componente X
+FResultante.fdy() componente Y
+*/
+class tVector
+{
+  public:
+    tVector(){initialize();}
+    tVector(const tVector &C);
+    
+    tVector& operator+(const tVector &B);
+    tVector& operator-(const tVector &B);
+    void operator+=(const tVector &C);
+    void operator=(const tVector &C);
+    tVector& operator*(double value);
+
+    //input data
+    inline virtual void setXY(double distX, double distY){x=distX;y=distY;}
+    inline virtual void setMT(double mod, double direction){module=mod; theta=direction;}
+    //output data
+    inline double ang(){return theta;}
+    inline double mod(){return module;}
+    inline double fdx(){return x;}
+    inline double fdy(){return y;}
+
+  protected:
+	 void initialize();
+    double x,y;      //componentes
+    double module;   //módulo do vetor
+    double theta;    //direção do vetor
+};
+
+class tForce:public tVector
+{
+	public:
+      void setXY(double distX, double distY);
+      void setMT(double mod, double direction);
+	  void setXYMod(double distX, double distY, double Modulo);
+	  void operator=(tVector &C){tVector::operator =(C);}
+      tForce():tVector(){};
+};
+
+#endif

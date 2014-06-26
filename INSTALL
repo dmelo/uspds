@@ -1,0 +1,8 @@
+The installations procedures are the default for GNU programs:
+tar -zxvf uspds-version.tar.gz (by version, understand the version of the program).
+cd uspds-version
+./configure
+make
+make install (this step is deprecated)
+
+For any error in compilation, be sure that your system have installed all required softwares and libraries. If you continues to get errors please, send an email to dmelo87@gmail.com.

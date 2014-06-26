@@ -1,0 +1,633 @@
+/*
+    USPDroidsSimulator
+    (C) 2007  Diogo Oliveira de Melo
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+    src/simulator/simulator.cc
+*/
+
+#include"simulator.h"
+
+int pronto = 0;
+bool fim_jogo = false;
+pthread_mutex_t mutex_control;
+float bx, by;
+float *tax = (float *) new float[N_JOGADORES_POR_TIME];
+float *tay = (float *) new float[N_JOGADORES_POR_TIME];
+float *taa = (float *) new float[N_JOGADORES_POR_TIME];
+float *tbx = (float *) new float[N_JOGADORES_POR_TIME];
+float *tby = (float *) new float[N_JOGADORES_POR_TIME];
+float *tba = (float *) new float[N_JOGADORES_POR_TIME];
+
+float va_e[N_JOGADORES_POR_TIME], va_d[N_JOGADORES_POR_TIME];
+float vb_e[N_JOGADORES_POR_TIME], vb_d[N_JOGADORES_POR_TIME];
+
+simulator::simulator() {
+    c = new campo();
+    b = new bola(((c->getX(0) + c->getX(15)) / 2) , (c->getY(3) + c->getY(4)) / 2, new vetor2d(0.0, 0.0), new vetor2d(0, 0));
+
+    for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+        time1[i] = new robo(((c->getX(1) * 3) + c->getX(14)) / 4, ((c->getY(7) * (3 - i)) + (c->getY(0) * (i + 1))) / 4, 0);
+        time2[i] = new robo((c->getX(1) + (c->getX(14) * 3)) / 4, (((c->getY(7) * (3 - i)) + (c->getY(0) * (i + 1))) / 4) - (ROBO_ARESTA / 2), M_PI);
+    }
+}
+
+
+void *executar_movimento(void *a) {
+    int count = 0;
+    int count2 = 0;
+    simulator *sim = (simulator *) a;
+
+    int n_iteracoes_por_quadro = (int) (((float) 1 / (float) N_QUADROS_POR_SEGUNDO) / TEMPO_POR_QUADRO);
+    long int point1 = 0, point2 = 0;
+    long int t_por_envio = 1000 / N_QUADROS_POR_SEGUNDO;
+
+    pthread_mutex_lock(&mutex_control);
+    for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+        sim->time1[i]->setVel(0.01, 0.01);
+        sim->time2[i]->setVel(0.01, 0.01);
+    }
+    pthread_mutex_unlock(&mutex_control);
+
+    while(pronto != 4) {
+        cout << "pronto: " << pronto << endl;
+        objeto::sleep2(300);
+    }
+    
+    pthread_mutex_lock(&mutex_control);
+    pronto = 5;
+    pthread_mutex_unlock(&mutex_control);
+    while(true) {
+        //pthread_mutex_lock(&mutex_control);
+        string mensagem;
+        if(count % n_iteracoes_por_quadro == 0) {
+            
+            pthread_mutex_lock(&mutex_control);
+            bx = sim->b->getX();
+            by = sim->b->getY();
+            for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+                tax[i] = sim->time1[i]->getX();
+                tay[i] = sim->time1[i]->getY();
+                taa[i] = sim->time1[i]->getAng();
+
+                tbx[i] = sim->time2[i]->getX();
+                tby[i] = sim->time2[i]->getY();
+                tba[i] = sim->time2[i]->getAng();
+            }
+            pthread_mutex_unlock(&mutex_control);
+        }
+
+        pthread_mutex_lock(&mutex_control);
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            sim->time1[i]->setVel(va_e[i], va_d[i]);
+            sim->time2[i]->setVel(vb_e[i], vb_d[i]);
+        }
+
+        // Calculando atributos.
+
+        sim->b->calc_atributos(sim->c, N_JOGADORES_POR_TIME, sim->time1, sim->time2);
+
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            sim->time1[i]->calc_atributos(sim->c, sim->b->getX(), sim->b->getY(), sim->b->getVelocidade(), sim->b->getForca_resultante(), sim->time1, sim->time2);
+
+            sim->time2[i]->calc_atributos(sim->c, sim->b->getX(), sim->b->getY(), sim->b->getVelocidade(), sim->b->getForca_resultante(), sim->time2, sim->time1);
+        }
+
+        // atualizar atributos.
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            sim->time1[i]->atualizar_atributos();
+            sim->time2[i]->atualizar_atributos();
+        }
+	sim->verify_objects();
+        sim->b->atualizar_atributos();
+        pthread_mutex_unlock(&mutex_control);
+
+        count++;
+        count2++;
+    }
+
+    
+
+    pthread_exit(NULL);
+}
+
+void *estrategia_1_send(void * a) {
+    simulator *sim = (simulator *) a;
+    int listenSocket;
+    struct sockaddr_in serverAddress;
+    struct sockaddr_in clientAddress;
+    int novo_id, connectSocket;
+    socklen_t clientAddressLength;
+    
+    //cria socket.
+    listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenSocket < 0) {
+        cerr << "erro: não pode criar o socket." << endl;
+        exit(1);
+    }
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(PORTA_E1_SEND);
+    if(bind(listenSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+        cerr << "erro: não foi possível dar bind no socket." << endl;
+        exit(1);
+    }
+    cout << "esperando conexão da estratégia 1 para send." << endl;
+    listen(listenSocket, 5);
+
+    clientAddressLength = sizeof(clientAddress);
+    connectSocket = accept(listenSocket, (struct sockaddr *) &clientAddress, &clientAddressLength);
+    if(connectSocket < 0) {
+        cerr << "erro: não foi possível aceitar a conexão." << endl;
+        exit(1);
+    }
+
+    pthread_mutex_lock(&mutex_control);
+    pronto++;
+    pthread_mutex_unlock(&mutex_control);
+    while(pronto != 5)
+        objeto::sleep2(10);
+    //executa loop.
+    float bx, by;
+    float tax[N_JOGADORES_POR_TIME];
+    float tay[N_JOGADORES_POR_TIME];
+    float taa[N_JOGADORES_POR_TIME];
+    float tbx[N_JOGADORES_POR_TIME];
+    float tby[N_JOGADORES_POR_TIME];
+    while(fim_jogo == false) {
+        objeto::sleep2(29);
+        pthread_mutex_lock(&mutex_control);
+        bx = sim->b->getX();
+        by = sim->b->getY();
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            tax[i] = sim->time1[i]->getX();
+            tay[i] = sim->time1[i]->getY();
+            taa[i] = sim->time1[i]->getAng();
+            tbx[i] = sim->time2[i]->getX();
+            tby[i] = sim->time2[i]->getY();
+        }
+        pthread_mutex_unlock(&mutex_control);
+        int tamanho = (5 * N_JOGADORES_POR_TIME) + 2;
+        float *mensagem = (float *) new float[tamanho];
+        mensagem[0] = bx;
+        mensagem[1] = by;
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            mensagem[2 + (3 * i)] = tax[i];
+            mensagem[3 + (3 * i)] = tay[i];
+            mensagem[4 + (3 * i)] = taa[i];
+            mensagem[(3 * N_JOGADORES_POR_TIME) + 2 + (2 * i)] = tbx[i];
+            mensagem[(3 * N_JOGADORES_POR_TIME) + 3 + (2 * i)] = tby[i];
+        }
+        send(connectSocket, mensagem, tamanho * sizeof(float), 0);
+        delete []mensagem;
+    }
+
+    pthread_exit(NULL);
+}
+
+void *estrategia_1_recv(void *a) {
+    struct sockaddr_in clientAddress;
+    int novo_id, connectSocket;
+    socklen_t clientAddressLength;
+    simulator *sim = (simulator *) a;
+    int listenSocket;
+    struct sockaddr_in serverAddress;
+    float ve[N_JOGADORES_POR_TIME];
+    float vd[N_JOGADORES_POR_TIME];
+    int tamanho = (2 * N_JOGADORES_POR_TIME);
+    float *mensagem = (float *) new float[tamanho];
+
+
+    //cria socket
+    listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenSocket < 0) {
+        cerr << "erro: não pode criar o socket." << endl;
+        exit(1);
+    }
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(PORTA_E1_RECV);
+    if(bind(listenSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+        cerr << "erro: não foi possível dar bind no socket." << endl;
+        exit(1);
+    }
+    cout << "esperando conexão da estratégia 1 para recv." << endl;
+    listen(listenSocket, 5);
+    clientAddressLength = sizeof(clientAddress);
+    connectSocket = accept(listenSocket, (struct sockaddr *) &clientAddress, &clientAddressLength);
+    if(connectSocket < 0) {
+        cerr << "erro: não foi possível aceitar a conexão." << endl;
+        exit(1);
+    }
+    pthread_mutex_lock(&mutex_control);
+    pronto++;
+    pthread_mutex_unlock(&mutex_control);
+    while(pronto != 5)
+        objeto::sleep2(10);
+    //executa loop.
+    while(fim_jogo == false) {
+        if(recv(connectSocket, mensagem, tamanho * sizeof(float), MSG_DONTWAIT) != -1) {
+            pthread_mutex_lock(&mutex_control);
+            for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+                va_e[i] = mensagem[i * 2];
+                va_d[i] = mensagem[(i * 2) + 1];
+            }
+            pthread_mutex_unlock(&mutex_control);
+        }
+        objeto::sleep2(29);
+    }
+    delete []mensagem;
+    pthread_exit(NULL);
+}
+
+void *estrategia_2_send(void * a) {
+    struct sockaddr_in clientAddress;
+    int novo_id, connectSocket;
+    socklen_t clientAddressLength;
+    simulator *sim = (simulator *) a;
+    int listenSocket;
+    struct sockaddr_in serverAddress;
+    
+    //cria socket.
+    listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenSocket < 0) {
+        cerr << "erro: não pode criar o socket." << endl;
+        exit(1);
+    }
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(PORTA_E2_SEND);
+    if(bind(listenSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+        cerr << "erro: não foi possível dar bind no socket." << endl;
+        exit(1);
+    }
+    cout << "esperando conexão da estratégia 1 para send." << endl;
+    listen(listenSocket, 5);
+
+    clientAddressLength = sizeof(clientAddress);
+    connectSocket = accept(listenSocket, (struct sockaddr *) &clientAddress, &clientAddressLength);
+    if(connectSocket < 0) {
+        cerr << "erro: não foi possível aceitar a conexão." << endl;
+        exit(1);
+    }
+
+
+    pthread_mutex_lock(&mutex_control);
+    pronto++;
+    pthread_mutex_unlock(&mutex_control);
+    while(pronto != 5)
+        objeto::sleep2(10);
+    //executa loop.
+    float bx, by;
+    float tax[N_JOGADORES_POR_TIME];
+    float tay[N_JOGADORES_POR_TIME];
+    float taa[N_JOGADORES_POR_TIME];
+    float tbx[N_JOGADORES_POR_TIME];
+    float tby[N_JOGADORES_POR_TIME];
+    
+    while(fim_jogo == false) {
+        objeto::sleep2(29);
+        pthread_mutex_lock(&mutex_control);
+        bx = sim->b->getX();
+        by = sim->b->getY();
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            tax[i] = sim->time2[i]->getX();
+            tay[i] = sim->time2[i]->getY();
+            taa[i] = sim->time2[i]->getAng();
+            tbx[i] = sim->time1[i]->getX();
+            tby[i] = sim->time1[i]->getY();
+        }
+        pthread_mutex_unlock(&mutex_control);
+        int tamanho = (5 * N_JOGADORES_POR_TIME) + 2;
+        float *mensagem = (float *) new float[tamanho];
+        mensagem[0] = bx;
+        mensagem[1] = by;
+        for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+            mensagem[2 + (3 * i)] = tax[i];
+            mensagem[3 + (3 * i)] = tay[i];
+            mensagem[4 + (3 * i)] = taa[i];
+            mensagem[(3 * N_JOGADORES_POR_TIME) + 2 + (2 * i)] = tbx[i];
+            mensagem[(3 * N_JOGADORES_POR_TIME) + 3 + (2 * i)] = tby[i];
+        }
+        send(connectSocket, mensagem, tamanho * sizeof(float), 0);
+    }
+
+    pthread_exit(NULL);
+}
+
+void *estrategia_2_recv(void * a) {
+    struct sockaddr_in clientAddress;
+    int novo_id, connectSocket;
+    socklen_t clientAddressLength;
+    simulator *sim = (simulator *) a;
+    int listenSocket;
+    struct sockaddr_in serverAddress;
+    float ve[N_JOGADORES_POR_TIME];
+    float vd[N_JOGADORES_POR_TIME];
+    int tamanho = (2 * N_JOGADORES_POR_TIME);
+    float *mensagem = (float *) new float[tamanho];
+
+    //cria socket
+    listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenSocket < 0) {
+        cerr << "erro: não pode criar o socket." << endl;
+        exit(1);
+    }
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(PORTA_E2_RECV);
+    if(bind(listenSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+        cerr << "erro: não foi possível dar bind no socket." << endl;
+        exit(1);
+    }
+    cout << "esperando conexão da estratégia 1 para recv." << endl;
+    listen(listenSocket, 5);
+    clientAddressLength = sizeof(clientAddress);
+    connectSocket = accept(listenSocket, (struct sockaddr *) &clientAddress, &clientAddressLength);
+    if(connectSocket < 0) {
+        cerr << "erro: não foi possível aceitar a conexão." << endl;
+        exit(1);
+    }
+    pthread_mutex_lock(&mutex_control);
+    pronto++;
+    pthread_mutex_unlock(&mutex_control);
+    while(pronto != 5)
+        objeto::sleep2(10);
+    //executa loop.
+    while(fim_jogo == false) {
+
+        if(recv(connectSocket, mensagem, tamanho * sizeof(float), MSG_DONTWAIT) != -1) {
+            pthread_mutex_lock(&mutex_control);
+            for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+                vb_e[i] = mensagem[i * 2];
+                vb_d[i] = mensagem[(i * 2) + 1];
+            }
+            pthread_mutex_unlock(&mutex_control);
+        }
+        objeto::sleep2(29);
+    }
+
+    pthread_exit(NULL);
+}
+
+void *eyes_sender(void *c) {
+    struct eyes_client *cli = (struct eyes_client *) c;
+    
+    string mensagem;
+    printf("sending... clientSocket = %d\n", cli->clientSocket);
+
+
+    while(!fim_jogo) {
+	pthread_mutex_lock(&mutex_control);
+	mensagem = protocolo::encode(bx, by, N_JOGADORES_POR_TIME, tax, tay, taa, tbx, tby, tba);
+	pthread_mutex_unlock(&mutex_control);
+
+
+	send(cli->clientSocket, mensagem.c_str(), strlen(mensagem.c_str()), 0);
+        objeto::sleep2(29);
+    }
+}
+
+
+void *eyes_main(void *a) {
+    pthread_t eyes_s;
+    pthread_attr_t attr;
+    struct sockaddr_in clientAddress;
+    int novo_id, connectSocket;
+    socklen_t clientAddressLength;
+    simulator *sim = (simulator *) a;
+    int listenSocket;
+    struct sockaddr_in serverAddress;
+    float ve[N_JOGADORES_POR_TIME];
+    float vd[N_JOGADORES_POR_TIME];
+    int tamanho = (2 * N_JOGADORES_POR_TIME);
+    unsigned short int listenPort = 4321;
+
+    //cria socket
+    listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenSocket < 0) {
+        cerr << "Simulator: Eyes: erro: não pode criar o socket." << endl;
+        exit(1);
+    }
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(listenPort);
+    if(bind(listenSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+        cerr << "Simulator: Eyes: erro: não foi possível dar bind no socket." << endl;
+        exit(1);
+    }
+    listen(listenSocket, 5);
+    clientAddressLength = sizeof(clientAddress);
+    cout << "Simulator: Eyes: Ready to receave connection from Eyes." << endl;
+    while(1) {
+	connectSocket = accept(listenSocket, (struct sockaddr *) &clientAddress, &clientAddressLength);
+	if(connectSocket < 0) {
+	    cerr << "Simulator: Eyes: erro: Cannot accept new connection." << endl;
+	    exit(1);
+	}
+	cout << "Simulator: Eyes: The Eyes is connected." << endl;
+	struct hostent *clienthostinfo;
+	clienthostinfo = gethostbyaddr(&(clientAddress.sin_addr), 4, AF_INET);
+	cout << "The IP client is " << clienthostinfo->h_name << endl;
+	struct eyes_client *cli = new struct eyes_client;
+
+	cli->clientSocket = connectSocket;
+	printf("connectSocket: %d.\n", connectSocket);
+	cli->clientAddress = clientAddress;
+
+	pthread_create(&eyes_s, &attr, eyes_sender, (void *) cli);
+
+    }
+
+    pthread_exit(0);
+}
+
+void simulator::verify_objects() {
+    bool finish;
+
+    do {
+	finish = true;
+	float dist;
+	for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+	    if((dist = dist_overlap_robot_ball(time1[i]->getNewX(), time1[i]->getNewY(), time1[i]->getNewAng(), b->getNewX(), b->getNewY())) != 0.0) {
+		finish = false;
+		move_robot_ball(dist, time1[i], b);
+		// afastar os objetos;
+		printf("Simulator: verify_objects: robot ball anomaly detected\n");
+	    }
+	    if((dist = dist_overlap_robot_ball(time2[i]->getNewX(), time2[i]->getNewY(), time2[i]->getNewAng(), b->getNewX(), b->getNewY())) != 0.0) {
+		finish = false;
+		move_robot_ball(dist, time2[i], b);
+		// afastar os objetos;
+		printf("Simulator: verify_objects: robot ball anomaly detected\n");
+	    }
+	    if((dist = dist_overlap_field_robot(time1[i]->getNewX(), time1[i]->getNewY(), time1[i]->getNewAng())) != 0.0) {
+		finish = false;
+		move_field_robot(dist, c, time1[i]);
+		printf("Simulator: verify_objects: robot field anomaly detected\n");
+	    }
+	    if((dist = dist_overlap_field_robot(time2[i]->getNewX(), time2[i]->getNewY(), time2[i]->getNewAng())) != 0.0) {
+		finish = false;
+		move_field_robot(dist, c, time2[i]);
+		printf("Simulator: verify_objects: robot field anomaly detected\n");
+	    }
+	    for(int j = 0; j < N_JOGADORES_POR_TIME; j++) {
+		// time1 time2
+		if((dist = dist_overlap_robot_robot(time1[i]->getNewX(), time1[i]->getNewY(), time1[i]->getNewAng(), time2[j]->getNewX(), time2[j]->getNewY(), time2[j]->getNewAng())) != 0.0) {
+		    finish = false;
+		    move_robot_robot(dist, time1[i], time2[j]);
+		    printf("Simulator: verify_objects: robot robot anomaly detected\n");
+		}
+		// time1 time1
+		if(i != j) {
+		    if((dist =  dist_overlap_robot_robot(time1[i]->getNewX(), time1[i]->getNewY(), time1[i]->getNewAng(), time1[j]->getNewX(), time1[j]->getNewY(), time1[j]->getNewAng())) != 0.0) {
+			finish = false;
+			move_robot_robot(dist, time1[i], time1[j]);
+			printf("Simulator: verify_objects: robot robot anomaly detected\n");
+		    }
+		    //time2 time2
+		    if((dist =  dist_overlap_robot_robot(time2[i]->getNewX(), time2[i]->getNewY(), time2[i]->getNewAng(), time2[j]->getNewX(), time2[j]->getNewY(), time2[j]->getNewAng())) != 0.0) {
+			finish = false;
+			move_robot_robot(dist, time2[i], time2[j]);
+			printf("Simulator: verify_objects: robot robot anomaly detected\n");
+		    }
+		}
+	    }
+	}
+	
+	if((dist = dist_overlap_field_ball(b->getNewX(), b->getNewY())) != 0.0) {
+	    finish = false;
+	    move_field_ball(dist, c, b);
+	    printf("Simulator: verify_objects: field ball anomaly detected\n");
+	}
+    } while(!finish);
+}
+
+float simulator::dist_overlap_robot_robot(float ra_x, float ra_y, float ra_a, float rb_x, float rb_y, float rb_a) {
+    
+    return 0.0;
+
+}
+
+float simulator::dist_overlap_robot_ball(float ra_x, float ra_y, float ra_a, float b_x, float b_y) {
+    
+    return 0.0;
+
+}
+
+float simulator::dist_overlap_field_ball(float b_x, float b_y) { 
+    
+    return 0.0;
+
+}
+
+float simulator::dist_overlap_field_robot(float ra_x, float ra_y, float ra_a){
+    
+    return 0.0;
+
+}
+
+// dist detona a distância que cada objeto deve ser deslocado.
+bool simulator::move_robot_ball(float dist, robo *r, bola *b) {
+    float angb = atan2f(b->getNewY() - r->getNewY(), b->getNewX() - r->getNewX());
+
+    b->setNewX(b->getNewX() + (dist * cos(angb)));
+    b->setNewY(b->getNewY() + (dist * sin(angb)));
+
+    angb += M_PI;
+    r->setNewX(r->getNewX() + (dist * cos(angb)));
+    r->setNewY(r->getNewY() + (dist * sin(angb)));
+
+    return true;
+}
+
+bool simulator::move_robot_robot(float dist, robo *r1, robo *r2) {
+    float angb = atan2f(r1->getNewY() - r2->getNewY(), r1->getNewX() - r2->getNewX());
+
+    r1->setNewX(r1->getNewX() + (dist * cos(angb)));
+    r1->setNewY(r1->getNewY() + (dist * sin(angb)));
+
+    angb += M_PI;
+    r2->setNewX(r2->getNewX() + (dist * cos(angb)));
+    r2->setNewY(r2->getNewY() + (dist * sin(angb)));
+
+    return true;
+}
+
+bool simulator::move_field_ball(float dist, campo *c, bola *b) {
+    float cx = (c->getX(0) + c->getX(15)) / 2;
+    float cy = (c->getY(0) + c->getY(7)) / 2;
+
+    float angb = atan2f(cy - b->getNewY(), cx - b->getNewX());
+
+    b->setNewX(b->getNewX() + (dist * cos(angb)));
+    b->setNewY(b->getNewY() + (dist * sin(angb)));
+
+    return true;
+}
+
+bool simulator::move_field_robot(float dist, campo *c, robo *r) {
+    float cx = (c->getX(0) + c->getX(15)) / 2;
+    float cy = (c->getY(0) + c->getY(7)) / 2;
+
+    float angb = atan2f(cy - r->getNewY(), cx - r->getNewX());
+
+    r->setNewX(r->getNewX() + (dist * cos(angb)));
+    r->setNewY(r->getNewY() + (dist * sin(angb)));
+
+    return true;
+}
+
+
+int main(int argc, char *argv[]) {
+    pthread_attr_t attr;
+    pthread_t kernel, est1_send, est1_recv, est2_send, est2_recv, eyes;
+    pthread_mutex_init(&mutex_control, NULL);
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    for(int i = 0; i < N_JOGADORES_POR_TIME; i++) {
+        va_e[i] = 0.01;
+        va_d[i] = 0.01;
+        vb_e[i] = 0.01;
+        vb_d[i] = 0.01;
+    }
+
+    simulator *sim = new simulator();
+
+    pthread_create(&est1_send, &attr, estrategia_1_send, (void *) sim);
+    pthread_create(&est1_recv, &attr, estrategia_1_recv, (void *) sim);
+    pthread_create(&est2_send, &attr, estrategia_2_send, (void *) sim);
+    pthread_create(&est2_recv, &attr, estrategia_2_recv, (void *) sim);
+    pthread_create(&eyes, &attr, eyes_main, (void *) sim);
+    pthread_create(&kernel, &attr, executar_movimento, (void *) sim);
+    int status;
+    pthread_join(est1_send, (void **) &status);
+    pthread_join(est1_recv, (void **) &status);
+    pthread_join(est2_send, (void **) &status);
+    pthread_join(est2_recv, (void **) &status);
+    pthread_join(eyes, (void **) &status);
+    pthread_join(kernel, (void **) &status);
+    pthread_mutex_destroy(&mutex_control);
+    //pthread_exit(NULL);
+
+    return 0;
+}

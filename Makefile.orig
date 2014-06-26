@@ -1,0 +1,60 @@
+SRC=./src
+SIMULATOR=${SRC}/simulator
+EYES_JAVA=${SRC}/eyes_java
+STRATEGY=${SRC}/strategy
+LIB=${SRC}/lib
+EYES_JAVA=${SRC}/eyes_java
+EYES_OPENGL=${SRC}/eyes_opengl
+BIN=./bin
+CCC=gcc
+CC=g++
+JC=javac
+FLAGS=-O3 -march=i686 -mtune=pentium4 -msse
+
+all: ${BIN}/simulator ${BIN}/strategy ${BIN}/Eyes.class ${BIN}/eyes doc/
+
+# Documentação
+
+doc/: ${SIMULATOR}/simulator.h ${LIB}/objeto.h ${LIB}/parametros.h ${SIMULATOR}/campo.h ${SIMULATOR}/robo.h ${SIMULATOR}/bola.h ${LIB}/protocolo.h ${EYES_JAVA}/Eyes.java ${EYES_OPENGL}/eyes.h 
+	doxygen doxygen.cfg >& doxygen.log
+
+# SIMULADOR
+${BIN}/simulator: ${BIN}/campo.o ${BIN}/bola.o ${BIN}/robo.o ${BIN}/protocolo.o ${SIMULATOR}/simulator.cc ${SIMULATOR}/simulator.h
+	${CC} ${FLAGS} ${SIMULATOR}/simulator.cc ${BIN}/campo.o ${BIN}/bola.o ${BIN}/robo.o ${BIN}/objeto.o ${BIN}/vetor2d.o ${BIN}/protocolo.o -o ${BIN}/simulator -lpthread
+
+${BIN}/vetor2d.o: ${LIB}/vetor2d.cc ${LIB}/vetor2d.h
+	${CC} ${FLAGS} -c ${LIB}/vetor2d.cc -o ${BIN}/vetor2d.o
+
+${BIN}/objeto.o: ${LIB}/objeto.cc ${LIB}/objeto.h ${LIB}/parametros.h ${BIN}/vetor2d.o
+	${CC} ${FLAGS} -c ${LIB}/objeto.cc -o ${BIN}/objeto.o
+
+${BIN}/campo.o: ${SIMULATOR}/campo.h ${SIMULATOR}/campo.cc ${LIB}/parametros.h ${BIN}/objeto.o ${BIN}/vetor2d.o
+	${CC} ${FLAGS} -c ${SIMULATOR}/campo.cc -o  ${BIN}/campo.o
+
+${BIN}/robo.o: ${SIMULATOR}/robo.h ${SIMULATOR}/robo.cc ${LIB}/parametros.h ${BIN}/objeto.o ${BIN}/vetor2d.o
+	${CC} ${FLAGS} -c ${SIMULATOR}/robo.cc -o  ${BIN}/robo.o
+
+${BIN}/bola.o: ${SIMULATOR}/bola.h ${SIMULATOR}/bola.cc ${LIB}/parametros.h ${BIN}/objeto.o ${BIN}/vetor2d.o ${BIN}/robo.o
+	${CC} ${FLAGS} -c ${SIMULATOR}/bola.cc -o  ${BIN}/bola.o
+
+${BIN}/protocolo.o: ${LIB}/protocolo.h ${LIB}/protocolo.cc
+	${CC} ${FLAGS} -c ${LIB}/protocolo.cc -o  ${BIN}/protocolo.o
+
+
+
+# ESTRATÉGIA
+${BIN}/strategy: ${STRATEGY}/strategy.cc ${STRATEGY}/strategy.h ${BIN}/objeto.o ${BIN}/vetor2d.o ${BIN}/res_sistema.o
+	${CC} ${FLAGS} ${STRATEGY}/strategy.cc ${BIN}/objeto.o ${BIN}/vetor2d.o ${BIN}/res_sistema.o -o ${BIN}/strategy
+
+${BIN}/res_sistema.o: ${LIB}/res_sistema.cc ${LIB}/res_sistema.h
+	${CC} ${FLAGS} -c ${LIB}/res_sistema.cc -o ${BIN}/res_sistema.o
+
+
+
+# GUI Java
+${BIN}/Eyes.class: ${EYES_JAVA}/Eyes.java
+	${JC} ${EYES_JAVA}/Eyes.java -d ${BIN}
+
+# GUI OpenGL
+${BIN}/eyes: ${EYES_OPENGL}/eyes.cc ${EYES_OPENGL}/eyes.h ${BIN}/objeto.o ${BIN}/protocolo.o ${BIN}/vetor2d.o ${BIN}/campo.o
+	${CC} ${FLAGS} ${EYES_OPENGL}/eyes.cc ${BIN}/objeto.o ${BIN}/protocolo.o ${BIN}/vetor2d.o ${BIN}/campo.o -o ${BIN}/eyes -lGL -lglut -lpthread

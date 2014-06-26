@@ -1,0 +1,97 @@
+1. Introduction
+
+    This document describe the protocol used on the simulator.
+
+2. Variables
+
+    Bellow is described each variable used in this document.
+
+    bx -> Variable that contains the X coordinate of the ball.
+    by -> Variable that contains the Y coordinate of the ball.
+
+    tax -> Vector that contains the X coordinates of the team A robots.
+    tay -> Vector that contains the Y coordinates of the team A robots.
+    taa -> Vector that contains the angles of each team A robot.
+
+    tbx -> Vector that contains the X coordinates of the team B robots.
+    tby -> Vector that contains the Y coordinates of the team B robots.
+    tba -> Vector that contains the angles of each team B robot.
+
+    ta -> Number of goals maked by team A.
+    tb -> Number of goals maked by team B.
+
+    time -> Time, in seconds, between the start of the game and the current time.
+
+    There is 16 points that describes the field.
+    cx -> Vector that contains the X coordinates of the field.
+    cy -> Vector that contains the Y coordinates of the field.
+
+3. Messages
+
+    There are six kinds of messages that can be sent from one program to another. The header of the messages contains information that describe the message. The header has the mask "$%c$", where the character describe the data type. In the sections bellow are described the kinds of messages that compose this protocol.
+
+    3.1 Objects - All objects is described with full information (X and Y coordinates and the angle). The character that describes this type is "O".
+
+	"$O$%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f\n"
+
+	This mask matches:
+
+	"$O$bx#by#tax[0]#tay[0]#taa[0]#tax[1]#tay[1]#taa[1]#tax[2]#tay[2]#taa[2]#tbx[0]#tby[0]#tba[0]#tbx[1]#tby[1]#tba[1]#tbx[2]#tby[2]#tba[2]"
+
+    3.2 Strategy - Almost equal to $O$. The angle of the B team is not on the message. The character that describes this type is "S". The objects are described only with the information that the strategy have to receve.
+
+	"$S$%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f\n"
+
+	This mask matches:
+
+	"$S$bx#by#tax[0]#tay[0]#taa[0]#tax[1]#tay[1]#taa[1]#tax[2]#tay[2]#taa[2]#tbx[0]#tby[0]#tbx[1]#tby[1]#tbx[2]#tby[2]"
+
+    3.3 Command - Is used to specify the new velocities that the strategy wants to each robot. The character that describes this type is "M".
+
+        "$M$%5.3f#%5.3f#%5.3f#%5.3f#%5.3f#%5.3f\n"
+
+	This mask matches:
+
+	"$M$vl[0]#vr[0]#vl[1]#vr[1]#vl[2]#vr[2]\n"
+
+    3.4 Score - The Score message is used to inform the score of the game.
+	
+	"$C$%d#%d\n"
+
+	This mask matches:
+
+	"$C$ta#tb\n"
+    
+    3.5 Time - Inform the time of the game. This information worry only about the time between the start and the current time. The unit for this data is second.
+
+	"$T$%d\n"
+
+	This mask matches:
+
+	"$T$time\n"
+
+    3.6 Vision Objects - This message follows a different format. The field separator for the values is "," and the character that specify the message type is "V". The format of the message is this. The values passed is in pixels and depends of the vision field message (section 3.6) the be complete.
+
+	"$V$%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n"
+
+	This mask matches:
+
+	"$V$bx,by,tax[0],tay[0],taa[0],tax[1],tay[1],taa[1],tax[2],tay[2],taa[2],tbx[0],tby[0],tba[0],tbx[1],tby[1],tba[1],tbx[2],tby[2],tba[2]\n"
+
+    3.7 Vision Field - This message contains the values of the vertices that defines the field.
+
+	"$F,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n"
+
+	this mask matches
+
+	"$F,cx[0],cy[0],cx[1],cy[1],cx[2],cy[2],cx[3],cy[3],cx[4],cy[4],cx[5],cy[5],cx[6],cy[6],cx[7],cy[7],cx[8],cy[8],cx[9],cy[9],cx[10],cy[10],cx[11],cy[11],cx[12],cy[12],cx[13],cy[13],cx[14],cy[14],cx[15],cy[15]\n"
+
+4. Conclusion
+
+    For each message type must be the encode and the decode for the messages. The name of the function/member will the the name of the message type (separated by undeline), antecipated by encode (or decode). Example:
+
+    The functions of the 3.6 section will have the names:
+
+    "encode_vision_field" and "decode_vision_field"
+
+    The encode functions must return a string object. The decode function must return a boolean value indicating if the translation was succeed (true), or not (false). When the function try to decode another kind of message, by example, the function must return false. Another case, in witch the function return false, is when the message is bad formatted.
